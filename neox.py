@@ -1,18 +1,35 @@
-import torch
 import os
-import torch.nn as nn
-from minimal20b import create_model, create_tokenizer
 import glob
+
+import torch
+import torch.nn as nn
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from minimal20b import create_model, create_tokenizer
 
 class BreakOuterLoop(Exception):
     pass
 
 def init_neox(path_model, # like .../GPTNeoX/20B_checkpoints/global_step150000
               ):
-    model_meta_directory = os.path.dirname(path_model)
-    path_tokenizer = glob.glob(model_meta_directory+'/*tokenizer.json')[0] # like .../GPTNeoX/20B_checkpoints/20B_tokenizer.json
-    model = create_model(path_model, use_cache=True,device='cuda:0',)
-    tokenizer = create_tokenizer(path_tokenizer)
+    if os.path.isdir(path_model):
+        model_meta_directory = os.path.dirname(path_model)
+        path_tokenizer = glob.glob(model_meta_directory+'/*tokenizer.json')[0] # like .../GPTNeoX/20B_checkpoints/20B_tokenizer.json
+        model = create_model(path_model, use_cache=True,device='cuda:0',)
+        tokenizer = create_tokenizer(path_tokenizer)
+        return model, tokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(path_model, trust_remote_code=True)
+    if tokenizer.pad_token is None and tokenizer.eos_token is not None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(
+        path_model,
+        trust_remote_code=True,
+        device_map="auto" if torch.cuda.is_available() else None,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else None,
+    )
+    model.eval()
+    model.gentkg_hf_backend = True
     return model, tokenizer
                             
 
@@ -85,6 +102,17 @@ def text_generation(m, k, model: nn.Module,
                          max_seq_len: int,
                          device=torch.device("cuda:0"), # 0. 
                          verbose=True):
+    if getattr(model, "gentkg_hf_backend", False):
+        return _hf_text_generation(
+            m,
+            k,
+            model,
+            tokenizer,
+            initial_str,
+            max_seq_len,
+            device,
+            verbose,
+        )
     """Generate greedily from 20B.
 
     :param model: NeoX20BModel
@@ -120,3 +148,52 @@ def text_generation(m, k, model: nn.Module,
         return decoded_str
     else:
         return '"#'+str(m)+'"' # Output when exception occurs #0...#9
+
+
+def _hf_text_generation(
+    m: int,
+    k: int,
+    model,
+    tokenizer,
+    initial_str: str,
+    max_seq_len: int,
+    device=torch.device("cuda:0"),
+    verbose=True,
+):
+    model_device = next(model.parameters()).device
+    inputs = tokenizer(initial_str, return_tensors="pt")
+    inputs = {key: value.to(model_device) for key, value in inputs.items()}
+
+    with torch.no_grad():
+        outputs = model(**inputs, use_cache=True)
+        logits = outputs.logits[:, -1, :]
+        top_tokens = torch.topk(logits, k=min(k, logits.shape[-1]), dim=-1).indices
+        chosen_token = top_tokens[:, min(m, top_tokens.shape[1] - 1)].unsqueeze(-1)
+        generated_ids = torch.cat([inputs["input_ids"], chosen_token], dim=-1)
+        past_key_values = outputs.past_key_values
+
+        next_token = chosen_token
+        newline_ids = tokenizer.encode("\n", add_special_tokens=False) or []
+        newline_id = newline_ids[0] if newline_ids else None
+        eos_id = model.config.eos_token_id
+
+        for _ in range(max_seq_len - 1):
+            outputs = model(input_ids=next_token, past_key_values=past_key_values, use_cache=True)
+            logits = outputs.logits[:, -1, :]
+            past_key_values = outputs.past_key_values
+            next_token = torch.argmax(logits, dim=-1, keepdim=True)
+            generated_ids = torch.cat([generated_ids, next_token], dim=-1)
+
+            token_val = next_token.item()
+            if eos_id is not None and token_val == eos_id:
+                break
+            if newline_id is not None and token_val == newline_id:
+                break
+
+    decoded_str = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+    if len(decoded_str) < 2:
+        return '"#'+str(m)+'"'
+    elif len(decoded_str) > 1 and decoded_str[1].isdigit():
+        return decoded_str
+    else:
+        return '"#'+str(m)+'"'

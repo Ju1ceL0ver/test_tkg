@@ -35,10 +35,11 @@ if __name__ == "__main__":
         patterns = [pattern1, pattern2, pattern3]
     topk= 10
     cnt = args.begin 
-    early_stop_chars = [torch.tensor([29962], device='cuda:0'), #]
-                        torch.tensor([29961], device='cuda:0'), #[
-                        torch.tensor([4638], device='cuda:0'),  #)]
-                        torch.tensor([29871], device='cuda:0')]  # 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    early_stop_chars = [torch.tensor([29962], device=device),
+                        torch.tensor([29961], device=device),
+                        torch.tensor([4638], device=device),
+                        torch.tensor([29871], device=device)]
     obligations = []
     evaler = Evaler(topk, tests, test_ans, eval_txt_path, args, model, tokenizer, patterns, early_stop_chars, obligations)
     

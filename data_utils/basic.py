@@ -5,6 +5,8 @@ import random
 from pathlib import Path
 import sys
 
+from tqdm.auto import tqdm
+
 def flip_dict(original_dict):
     return {v: k for k, v in original_dict.items()}
 
@@ -86,10 +88,17 @@ def read_txt_as_index_dict(path_txt, divider='\t'):
             })
     return li_corres
 
-def write_txt(txt_dir, out_list, head='\t'):
+def write_txt(txt_dir, out_list, head='\t', desc=None):
+    iterator = out_list
+    if desc is not None:
+        total = len(out_list) if hasattr(out_list, '__len__') else None
+        iterator = tqdm(out_list, total=total, desc=desc)
+
     with open(txt_dir, 'w', encoding='utf-8') as txtfile:
-        for sublist in out_list:
+        for sublist in iterator:
             txtfile.write(head.join(map(str, sublist)) + '\n')
+    if desc is not None and hasattr(iterator, 'close'):
+        iterator.close()
 
 def write_dict(txt_dir, out_dict):
     with open(txt_dir, 'w', encoding='utf-8') as txtfile:

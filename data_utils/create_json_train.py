@@ -3,12 +3,14 @@ import random
 import argparse
 import os
 
+from tqdm.auto import tqdm
+
 def convert_txt_to_json(inputs, entities, test_ans):
     ins = get_ins()
     test_ans = [x.strip().split('\t') for x in test_ans]
     
     data_list = []
-    for i in range(len(test_ans)):
+    for i in tqdm(range(len(test_ans)), desc="Building training records"):
         name_obj = test_ans[i][2]
         data = {
             "context": ins + inputs[i]+ "[/INST]",
@@ -26,7 +28,7 @@ def sample_data_training(dir_dataset, dir_of_answers, dir_of_entities2id, path_s
     output_file_full = path_save+"/"+name_train+'.json'
     just_write_json(data_list, output_file_full, indent=4)
     print("saved as ", output_file_full)
-    for num in nums_sample: 
+    for num in tqdm(nums_sample, desc="Sampling subsets"):
         sampled_data = random.sample(data_list, num) # 16, 64, 256, 512, 1024
         output_file = path_save+"/"+name_train+'_' + str(num) + '.json'
         just_write_json(sampled_data, output_file, indent=4)

@@ -31,6 +31,8 @@ def parse_args():
     parser.add_argument('--SAVE_TOTAL_LIMIT', type=int, default=None, help='The number of the checkpoint you will save (Excluding the final one)')
     parser.add_argument('--BIT_8', default=False, action="store_true", help='Use 8-bit')
     parser.add_argument('--BIT_4', default=False, action="store_true", help='Use 4-bit')
+    parser.add_argument('--TARGET_MODULES', type=str, default=None,
+                        help='Comma-separated LoRA target modules. If omitted, try to infer from model name.')
 
     parser.add_argument('--REPORT_TO', type=str, default=None, help='logging to e.g. wandb')
     parser.add_argument('--PROJ_NAME', type=str, default=None, help='Project name for e.g. wandb')

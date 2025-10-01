@@ -19,7 +19,11 @@ import torch
 from torch import nn
 import torch.distributed as dist
 
-from transformers.deepspeed import is_deepspeed_zero3_enabled
+try:
+    from transformers.deepspeed import is_deepspeed_zero3_enabled
+except ImportError:  # pragma: no cover - optional dependency
+    def is_deepspeed_zero3_enabled() -> bool:
+        return False
 from transformers.utils import logging
 from transformers.generation.beam_constraints import DisjunctiveConstraint, PhrasalConstraint
 from transformers.generation.beam_search import BeamScorer, BeamSearchScorer, ConstrainedBeamSearchScorer

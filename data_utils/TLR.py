@@ -4,14 +4,16 @@ import time as ti
 from tqdm import tqdm
 
 class Retriever:
-    def __init__(self, 
-                 test, all_facts, 
-                 entities, relations, times_id, 
-                 num_relations, chains, rel_keys, dataset, retrieve_type='TLogic',):
+    def __init__(self,
+                 test, all_facts,
+                 entities, relations, times_id,
+                 num_relations, chains, rel_keys, dataset,
+                 retrieve_type='TLogic', period=1):
         self.retrieve_type = retrieve_type
         self.dataset = dataset
         self.test = test
         self.all_facts = all_facts
+        self.period = int(period) if period else 1
         
         self.entities = entities
         self.relations = relations
@@ -157,9 +159,7 @@ class Retriever:
         return test_idx, test_text
 
     def collect_hist(self, i, facts, num_facts):
-        period = 1
-        if self.dataset == "icews14" or self.dataset == "icews18":
-            period = 24
+        period = self.period
         histories = []
         facts = facts[0:num_facts] # 
         facts.reverse() #Replace the order so that the last output is the one closest in time.
@@ -177,10 +177,11 @@ class Retriever:
         return histories
 
     def build_history_query(self, time, test_sub, test_rel, histories=''):
-        period = 1
-        if self.dataset == "icews14" or self.dataset == "icews18":
-            period = 24
-        time_in_id = self.times_id[time]
+        period = self.period
+        if isinstance(time, str):
+            time_in_id = self.times_id[time]
+        else:
+            time_in_id = int(time)
         return [''.join(histories)  + str(int(time_in_id)/int(period))+': ['+ test_sub +', '+ test_rel+',\n'#times id[time]
                 ]
     
